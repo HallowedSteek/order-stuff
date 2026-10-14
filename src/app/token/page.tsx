@@ -1,21 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { RawJson } from "@/components/RawJson";
-import type { TokenPair } from "@/lib/types";
+import { useEffect, useState } from "react";
 
 export default function TokenPage() {
   const [refreshToken, setRefreshToken] = useState("");
-  const [result, setResult] = useState<TokenPair | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/token")
+      .then((r) => r.json())
+      .then((d) => setConnected(!!d.connected))
+      .catch(() => setConnected(false));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setResult(null);
     try {
       const res = await fetch("/api/token", {
         method: "POST",
@@ -24,9 +28,8 @@ export default function TokenPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error([data.error, data.upstream].filter(Boolean).join("\n"));
-      setResult(data);
-      // Wolt rotates refresh tokens; keep the new one ready for the next call.
-      if (data.refresh_token) setRefreshToken(data.refresh_token);
+      setConnected(true);
+      setRefreshToken("");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -39,10 +42,15 @@ export default function TokenPage() {
       <p>
         <Link href="/">← Back</Link>
       </p>
-      <h1>Token refresh</h1>
+      <h1>Wolt account</h1>
+      <p>
+        Status:{" "}
+        {connected === null ? "checking…" : connected ? <strong>connected</strong> : <strong>not connected</strong>}
+      </p>
       <p className="muted">
-        POST authentication.wolt.com/v1/wauth2/access_token with grant_type=refresh_token. Grab a
-        refresh token from a logged-in wolt.com session (browser storage / network tab).
+        Paste a refresh token from a logged-in wolt.com session. The server exchanges it, keeps the session in
+        <code> .wolt-session.json</code> (gitignored) and refreshes it automatically; tokens are never sent back to
+        the browser. Wolt rotates refresh tokens, so the one you paste stops working for your browser session.
       </p>
       <form className="panel" onSubmit={submit}>
         <textarea
@@ -54,12 +62,11 @@ export default function TokenPage() {
         />
         <div className="row" style={{ marginTop: 8 }}>
           <button type="submit" disabled={loading || !refreshToken.trim()}>
-            {loading ? "Refreshing…" : "Refresh"}
+            {loading ? "Connecting…" : connected ? "Reconnect" : "Connect"}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
       </form>
-      {result && <RawJson data={{ ...result, access_token: `${result.access_token.slice(0, 24)}…` }} />}
     </main>
   );
 }

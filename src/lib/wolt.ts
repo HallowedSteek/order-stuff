@@ -6,11 +6,12 @@ import type {
   MenuCategory,
   MenuEntry,
   MenuItem,
+  MenuOptionGroup,
   TokenPair,
   VenueData,
 } from "./types";
 
-const CONSUMER_API = "https://consumer-api.wolt.com";
+export const CONSUMER_API = "https://consumer-api.wolt.com";
 const RESTAURANT_API = "https://restaurant-api.wolt.com";
 const AUTH_URL = "https://authentication.wolt.com/v1/wauth2/access_token";
 
@@ -24,7 +25,7 @@ export class WoltError extends Error {
   }
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
@@ -57,13 +58,79 @@ export async function getVenues(): Promise<VenueData[]> {
   return (data.sections?.[1]?.items ?? []).filter((i) => i.venue && inRomania(i.venue.country));
 }
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
-const asArray = (v: unknown): Json[] => (Array.isArray(v) ? (v as Json[]) : []);
-const asString = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+export const asArray = (v: unknown): Json[] => (Array.isArray(v) ? (v as Json[]) : []);
+export const asString = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const asInt = (v: unknown) => (typeof v === "number" && Number.isInteger(v) ? v : undefined);
+
+/** Names can be plain strings or translations ([{lang, value}] / {lang: value}). */
+export function text(v: unknown): string | undefined {
+  if (typeof v === "string") return v || undefined;
+  if (Array.isArray(v)) {
+    const list = v as Json[];
+    const en = list.find((t) => t.lang === "en") ?? list[0];
+    return asString(en?.value);
+  }
+  if (v && typeof v === "object") {
+    const map = v as Json;
+    return asString(map.en) ?? Object.values(map).map(asString).find(Boolean);
+  }
+  return undefined;
+}
 
 // Headers wolt.com's own web client sends.
-const WEB_HEADERS = { platform: "Web", "app-language": "en" };
+export const WEB_HEADERS = { platform: "Web", "app-language": "en" };
+
+export const assortmentUrl = (slug: string) =>
+  `${CONSUMER_API}/consumer-api/consumer-assortment/v1/venues/slug/${encodeURIComponent(slug)}/assortment`;
+
+/** Raw assortment, as returned by Wolt. */
+export function getRawAssortment(slug: string) {
+  return request<Json>(assortmentUrl(slug), { headers: WEB_HEADERS });
+}
+
+/**
+ * Resolve an item's option configurations against the assortment's root
+ * options. Returns null when the item uses option features this POC doesn't
+ * handle (prerequisites, free selections, unknown types).
+ */
+export function resolveOptions(item: Json, rootOptions: Map<string, Json>): MenuOptionGroup[] | null {
+  const groups: MenuOptionGroup[] = [];
+  for (const config of asArray(item.options)) {
+    const id = asString(config.id);
+    const root = rootOptions.get(asString(config.option_id) ?? "");
+    const rules = (config.multi_choice_config ?? {}) as Json;
+    const range = (rules.total_range ?? {}) as Json;
+    const min = asInt(range.min);
+    const max = asInt(range.max);
+    const maxSingle = asInt(rules.max_single_selections);
+    if (
+      !id ||
+      !root ||
+      (root.type !== "choice" && root.type !== "multi_choice") ||
+      asArray(config.prerequisite_values).length > 0 ||
+      (asInt(rules.free_selections) ?? 0) !== 0 ||
+      min === undefined ||
+      max === undefined ||
+      maxSingle === undefined
+    ) {
+      return null;
+    }
+    groups.push({
+      id,
+      name: text(config.name) ?? text(root.name) ?? "Options",
+      min,
+      max,
+      maxSingle,
+      values: asArray(root.values).flatMap((v) => {
+        const vid = asString(v.id);
+        return vid ? [{ id: vid, name: text(v.name) ?? vid, price: asInt(v.price) ?? 0 }] : [];
+      }),
+    });
+  }
+  return groups;
+}
 
 /**
  * GET consumer-assortment/.../assortment — the endpoint wolt.com itself uses.
@@ -71,16 +138,12 @@ const WEB_HEADERS = { platform: "Web", "app-language": "en" };
  * empty body (see https://github.com/NoaMcDa/KetoClub/pull/186).
  */
 async function getAssortment(slug: string): Promise<Menu> {
-  const data = await request<Json>(
-    `${CONSUMER_API}/consumer-api/consumer-assortment/v1/venues/slug/${encodeURIComponent(slug)}/assortment`,
-    { headers: WEB_HEADERS },
-  );
+  const data = await getRawAssortment(slug);
 
-  const optionNames = new Map<string, string>();
+  const rootOptions = new Map<string, Json>();
   for (const o of asArray(data.options)) {
     const id = asString(o.id);
-    const name = asString(o.name);
-    if (id && name) optionNames.set(id, name);
+    if (id) rootOptions.set(id, o);
   }
 
   const items = new Map<string, MenuEntry>();
@@ -88,16 +151,18 @@ async function getAssortment(slug: string): Promise<Menu> {
     const id = asString(i.id);
     if (!id) continue;
     const images = asArray(i.images);
+    const options = resolveOptions(i, rootOptions);
+    const price = typeof i.price === "number" ? i.price : null;
+    const disabled = i.disabled_info != null;
     items.set(id, {
       id,
-      name: asString(i.name) ?? "(unnamed)",
-      description: asString(i.description),
-      price: typeof i.price === "number" ? i.price : null,
+      name: text(i.name) ?? "(unnamed)",
+      description: text(i.description),
+      price,
       imageUrl: asString(images[0]?.url),
-      disabled: i.disabled_info != null,
-      options: asArray(i.options)
-        .map((o) => asString(o.name) ?? optionNames.get(asString(o.option_id) ?? asString(o.id) ?? ""))
-        .filter((n): n is string => !!n),
+      disabled,
+      options: options ?? [],
+      basketable: !disabled && price !== null && options !== null,
     });
   }
 
@@ -106,7 +171,7 @@ async function getAssortment(slug: string): Promise<Menu> {
   const placed = new Set<string>();
   const walk = (cats: Json[], prefix: string) => {
     for (const c of cats) {
-      const name = prefix + (asString(c.name) ?? "Untitled");
+      const name = prefix + (text(c.name) ?? "Untitled");
       const list = (Array.isArray(c.item_ids) ? c.item_ids : [])
         .map((id) => items.get(String(id)))
         .filter((i): i is MenuEntry => !!i);
@@ -151,7 +216,8 @@ async function getMenuData(slug: string): Promise<Menu> {
         price: i.baseprice ?? null,
         imageUrl: i.images?.[0]?.url,
         disabled: i.enabled === false,
-        options: (i.options ?? []).map((o) => o.name),
+        options: [],
+        basketable: false,
       },
     ]);
   }

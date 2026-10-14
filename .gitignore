@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Wolt login (rotated refresh token) — a credential, never commit
+.wolt-session.json

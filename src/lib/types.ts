@@ -79,6 +79,14 @@ export interface ItemSearchResult {
   estimate_range?: string;
 }
 
+/** One basket line as the browser sends it; prices are re-read from Wolt server-side. */
+export interface BasketLine {
+  itemId: string;
+  count: number;
+  /** option group (configuration) id → selected value ids */
+  options: Record<string, string[]>;
+}
+
 export interface TokenPair {
   access_token: string;
   refresh_token: string;
@@ -94,8 +102,29 @@ export interface MenuEntry {
   price: number | null;
   imageUrl?: string;
   disabled: boolean;
-  /** Names of the option groups (sizes, extras, …) the item offers. */
-  options: string[];
+  /** Option groups (sizes, sauces, extras, …) the item offers. */
+  options: MenuOptionGroup[];
+  /** Whether this POC can put the item in a Wolt basket (assortment data, supported options). */
+  basketable: boolean;
+}
+
+export interface MenuOptionValue {
+  id: string;
+  name: string;
+  /** Extra cost in minor units. */
+  price: number;
+}
+
+export interface MenuOptionGroup {
+  /** The item's option configuration id (what the basket references). */
+  id: string;
+  name: string;
+  /** How many values must/can be picked in total. */
+  min: number;
+  max: number;
+  /** Max count of one value (1 = plain checkbox/radio). */
+  maxSingle: number;
+  values: MenuOptionValue[];
 }
 
 export interface MenuCategory {

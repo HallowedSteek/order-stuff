@@ -56,7 +56,7 @@ export default function Home() {
         <a href="https://gist.github.com/OzTamir/7ed2b49b8628d88c086d65b0d1730c36">
           unofficial Wolt API doc
         </a>{" "}
-        through Next.js route handlers. · <Link href="/token">Token refresh</Link>
+        through Next.js route handlers. · <Link href="/token">Wolt account</Link>
       </p>
 
       <section className="panel">
