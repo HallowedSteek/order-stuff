@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { formatPrice } from "@/lib/format";
-import { DEFAULT_LOCATION as DEFAULT } from "@/lib/config";
+import { BUCHAREST } from "@/lib/config";
 import { RawJson } from "@/components/RawJson";
-import type { City, ItemSearchResult, VenueData } from "@/lib/types";
+import type { ItemSearchResult, VenueData } from "@/lib/types";
 
 type Tab = "nearby" | "venues" | "items";
 
@@ -17,37 +17,12 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function Home() {
-  const [lat, setLat] = useState<number>(DEFAULT.lat);
-  const [lon, setLon] = useState<number>(DEFAULT.lon);
-  const [cities, setCities] = useState<City[]>([]);
-  const [cityId, setCityId] = useState("");
   const [tab, setTab] = useState<Tab>("nearby");
   const [query, setQuery] = useState("shaorma");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [venues, setVenues] = useState<VenueData[] | null>(null);
   const [items, setItems] = useState<ItemSearchResult[] | null>(null);
-
-  useEffect(() => {
-    call<City[]>("/api/cities")
-      .then((list) => {
-        // Romanian cities first, then the rest alphabetically.
-        const ro = (c: City) => (c.country_code_alpha2 === DEFAULT.countryAlpha2 ? 0 : 1);
-        setCities([...list].sort((a, b) => ro(a) - ro(b) || a.name.localeCompare(b.name)));
-        const home = list.find((c) => c.slug === DEFAULT.citySlug);
-        if (home) setCityId(home.id);
-      })
-      .catch((e: Error) => setError(`Cities: ${e.message}`));
-  }, []);
-
-  function pickCity(id: string) {
-    setCityId(id);
-    const coords = cities.find((c) => c.id === id)?.location?.coordinates;
-    if (coords) {
-      setLon(coords[0]);
-      setLat(coords[1]);
-    }
-  }
 
   async function run() {
     setLoading(true);
@@ -56,12 +31,12 @@ export default function Home() {
     setItems(null);
     try {
       if (tab === "nearby") {
-        setVenues(await call<VenueData[]>(`/api/venues?lat=${lat}&lon=${lon}`));
+        setVenues(await call<VenueData[]>("/api/venues"));
       } else {
         const results = await call<VenueData[] | ItemSearchResult[]>("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ q: query, target: tab, lat, lon }),
+          body: JSON.stringify({ q: query, target: tab }),
         });
         if (tab === "venues") setVenues(results as VenueData[]);
         else setItems(results as ItemSearchResult[]);
@@ -75,7 +50,7 @@ export default function Home() {
 
   return (
     <main>
-      <h1>Wolt API POC</h1>
+      <h1>Wolt API POC · {BUCHAREST.name}, {BUCHAREST.country}</h1>
       <p className="muted">
         Exercises the{" "}
         <a href="https://gist.github.com/OzTamir/7ed2b49b8628d88c086d65b0d1730c36">
@@ -85,26 +60,7 @@ export default function Home() {
       </p>
 
       <section className="panel">
-        <div className="row">
-          <select value={cityId} onChange={(e) => pickCity(e.target.value)}>
-            <option value="" disabled>
-              {cities.length ? `Pick a city (${cities.length})` : "Loading cities…"}
-            </option>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.country_code_alpha2})
-              </option>
-            ))}
-          </select>
-          <label>
-            lat <input type="number" step="any" value={lat} onChange={(e) => setLat(Number(e.target.value))} />
-          </label>
-          <label>
-            lon <input type="number" step="any" value={lon} onChange={(e) => setLon(Number(e.target.value))} />
-          </label>
-        </div>
-
-        <div className="tabs" role="tablist">
+        <div className="tabs" role="tablist" style={{ marginTop: 0 }}>
           {(
             [
               ["nearby", "Nearby venues"],

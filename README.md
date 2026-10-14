@@ -3,9 +3,10 @@
 A small Next.js (App Router, TypeScript) proof of concept for the
 [unofficial Wolt API doc](https://gist.github.com/OzTamir/7ed2b49b8628d88c086d65b0d1730c36).
 
-Targeted at **Bucharest, Romania**: it starts at central Bucharest
-(44.4268, 26.1025), preselects Bucharest in the city picker (Romanian cities are
-listed first) and formats prices in RON. Change `src/lib/config.ts` to retarget.
+Tracks **Bucharest, Romania only**. The location is fixed server-side to
+central Bucharest (44.4268, 26.1025); clients can't pass coordinates, results
+explicitly outside Romania are dropped, and prices are shown in RON. The
+market lives in `src/lib/config.ts`.
 
 The browser never calls Wolt directly: Next.js route handlers proxy the requests
 (avoids CORS and keeps tokens server-side).
@@ -21,10 +22,9 @@ npm run dev   # http://localhost:3000
 
 | UI | Local route | Wolt endpoint |
 | --- | --- | --- |
-| City picker | `GET /api/cities` | `GET restaurant-api.wolt.com/v1/cities` |
-| Nearby venues | `GET /api/venues?lat=&lon=` | `GET consumer-api.wolt.com/v1/pages/restaurants` (`sections[1].items`) |
-| Search venues | `POST /api/search` `{q, target:"venues", lat, lon}` | `POST restaurant-api.wolt.com/v1/pages/search` (`sections[0].items`) |
-| Search items | `POST /api/search` `{q, target:"items", lat, lon}` | same, each result's `menu_item` |
+| Nearby venues | `GET /api/venues` | `GET consumer-api.wolt.com/v1/pages/restaurants` (`sections[1].items`) |
+| Search venues | `POST /api/search` `{q, target:"venues"}` | `POST restaurant-api.wolt.com/v1/pages/search` (`sections[0].items`) |
+| Search items | `POST /api/search` `{q, target:"items"}` | same, each result's `menu_item` |
 | Venue menu (`/venue/[slug]`) | `GET /api/venues/[slug]/menu` | `GET restaurant-api.wolt.com/v4/venues/slug/{slug}/menu/data` |
 | Token refresh (`/token`) | `POST /api/token` `{refresh_token}` | `POST authentication.wolt.com/v1/wauth2/access_token` |
 

@@ -1,6 +1,6 @@
 import "server-only";
+import { BUCHAREST } from "./config";
 import type {
-  City,
   ItemSearchResult,
   MenuItem,
   TokenPair,
@@ -36,17 +36,22 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+/** Wolt queries are location-based, but drop anything explicitly outside Romania. */
+function inRomania(country: string | undefined) {
+  return !country || country === BUCHAREST.countryAlpha3;
+}
+
 interface SectionsResponse<T> {
   sections?: { items?: T[] }[];
 }
 
 /** GET /v1/pages/restaurants — venues near a location (from sections[1].items). */
-export async function getVenues(lat: number, lon: number): Promise<VenueData[]> {
-  const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+export async function getVenues(): Promise<VenueData[]> {
+  const params = new URLSearchParams({ lat: String(BUCHAREST.lat), lon: String(BUCHAREST.lon) });
   const data = await request<SectionsResponse<VenueData>>(
     `${CONSUMER_API}/v1/pages/restaurants?${params}`,
   );
-  return (data.sections?.[1]?.items ?? []).filter((i) => i.venue);
+  return (data.sections?.[1]?.items ?? []).filter((i) => i.venue && inRomania(i.venue.country));
 }
 
 /** GET /v4/venues/slug/{slug}/menu/data — menu items for a venue. */
@@ -62,32 +67,26 @@ export async function getMenu(slug: string): Promise<MenuItem[]> {
   return data.items ?? [];
 }
 
-function search<T>(q: string, target: "venues" | "items", lat: number, lon: number) {
+function search<T>(q: string, target: "venues" | "items") {
   return request<SectionsResponse<T>>(`${RESTAURANT_API}/v1/pages/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ q, target, lat, lon }),
+    body: JSON.stringify({ q, target, lat: BUCHAREST.lat, lon: BUCHAREST.lon }),
   });
 }
 
 /** POST /v1/pages/search with target=venues (results in sections[0].items). */
-export async function searchVenues(q: string, lat: number, lon: number): Promise<VenueData[]> {
-  const data = await search<VenueData>(q, "venues", lat, lon);
-  return (data.sections?.[0]?.items ?? []).filter((i) => i.venue);
+export async function searchVenues(q: string): Promise<VenueData[]> {
+  const data = await search<VenueData>(q, "venues");
+  return (data.sections?.[0]?.items ?? []).filter((i) => i.venue && inRomania(i.venue.country));
 }
 
 /** POST /v1/pages/search with target=items (each result's `menu_item`). */
-export async function searchItems(q: string, lat: number, lon: number): Promise<ItemSearchResult[]> {
-  const data = await search<{ menu_item?: ItemSearchResult }>(q, "items", lat, lon);
+export async function searchItems(q: string): Promise<ItemSearchResult[]> {
+  const data = await search<{ menu_item?: ItemSearchResult }>(q, "items");
   return (data.sections?.[0]?.items ?? [])
     .map((i) => i.menu_item)
-    .filter((i): i is ItemSearchResult => !!i);
-}
-
-/** GET /v1/cities */
-export async function getCities(): Promise<City[]> {
-  const data = await request<{ results?: City[] }>(`${RESTAURANT_API}/v1/cities`);
-  return data.results ?? [];
+    .filter((i): i is ItemSearchResult => !!i && inRomania(i.country));
 }
 
 /** POST auth form — exchange a refresh token for a new access/refresh pair. */

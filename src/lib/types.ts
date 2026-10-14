@@ -69,6 +69,7 @@ export interface ItemSearchResult {
   id: string;
   name: string;
   price: number;
+  country?: string;
   currency?: string;
   image?: Image | null;
   is_available?: boolean;
@@ -76,17 +77,6 @@ export interface ItemSearchResult {
   venue_name?: string;
   venue_rating?: VenueRating;
   estimate_range?: string;
-}
-
-export interface City {
-  id: string;
-  name: string;
-  slug: string;
-  country_code_alpha2?: string;
-  country_code_alpha3?: string;
-  timezone?: string;
-  /** GeoJSON-ish point; coordinates are [lon, lat]. */
-  location?: { type?: string; coordinates: [number, number] };
 }
 
 export interface TokenPair {

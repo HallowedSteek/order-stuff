@@ -1,7 +1,8 @@
-/** Target market for the POC: Bucharest, Romania. */
-export const DEFAULT_LOCATION = {
-  citySlug: "bucharest",
-  countryAlpha2: "RO",
+/** The POC only tracks one market: Bucharest, Romania. */
+export const BUCHAREST = {
+  name: "Bucharest",
+  country: "Romania",
+  countryAlpha3: "ROU",
   // Piața Unirii, central Bucharest
   lat: 44.4268,
   lon: 26.1025,
