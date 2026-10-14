@@ -3,6 +3,10 @@
 A small Next.js (App Router, TypeScript) proof of concept for the
 [unofficial Wolt API doc](https://gist.github.com/OzTamir/7ed2b49b8628d88c086d65b0d1730c36).
 
+Targeted at **Bucharest, Romania**: it starts at central Bucharest
+(44.4268, 26.1025), preselects Bucharest in the city picker (Romanian cities are
+listed first) and formats prices in RON. Change `src/lib/config.ts` to retarget.
+
 The browser never calls Wolt directly: Next.js route handlers proxy the requests
 (avoids CORS and keeps tokens server-side).
 
@@ -38,6 +42,6 @@ against the doc.
 
 - Unofficial and undocumented: endpoints/shapes can change any time.
 - The menu endpoint may return 200 with an empty body; the UI shows an empty state.
-- Prices are integers, assumed to be minor units (e.g. `4500` = 45.00).
+- Prices are integers, assumed to be minor units (e.g. `4500` = 45,00 lei).
 - Only token *refresh* is documented; get an initial refresh token from a
   logged-in wolt.com session. Basket/ordering isn't covered.

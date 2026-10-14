@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/lib/format";
+import { DEFAULT_LOCATION as DEFAULT } from "@/lib/config";
 import { RawJson } from "@/components/RawJson";
 import type { City, ItemSearchResult, VenueData } from "@/lib/types";
 
 type Tab = "nearby" | "venues" | "items";
-
-// Tel Aviv by default — the doc's examples use ILS.
-const DEFAULT = { lat: 32.0853, lon: 34.7818 };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -19,11 +17,12 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function Home() {
-  const [lat, setLat] = useState(DEFAULT.lat);
-  const [lon, setLon] = useState(DEFAULT.lon);
+  const [lat, setLat] = useState<number>(DEFAULT.lat);
+  const [lon, setLon] = useState<number>(DEFAULT.lon);
   const [cities, setCities] = useState<City[]>([]);
+  const [cityId, setCityId] = useState("");
   const [tab, setTab] = useState<Tab>("nearby");
-  const [query, setQuery] = useState("pizza");
+  const [query, setQuery] = useState("shaorma");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [venues, setVenues] = useState<VenueData[] | null>(null);
@@ -31,11 +30,18 @@ export default function Home() {
 
   useEffect(() => {
     call<City[]>("/api/cities")
-      .then(setCities)
+      .then((list) => {
+        // Romanian cities first, then the rest alphabetically.
+        const ro = (c: City) => (c.country_code_alpha2 === DEFAULT.countryAlpha2 ? 0 : 1);
+        setCities([...list].sort((a, b) => ro(a) - ro(b) || a.name.localeCompare(b.name)));
+        const home = list.find((c) => c.slug === DEFAULT.citySlug);
+        if (home) setCityId(home.id);
+      })
       .catch((e: Error) => setError(`Cities: ${e.message}`));
   }, []);
 
   function pickCity(id: string) {
+    setCityId(id);
     const coords = cities.find((c) => c.id === id)?.location?.coordinates;
     if (coords) {
       setLon(coords[0]);
@@ -80,7 +86,7 @@ export default function Home() {
 
       <section className="panel">
         <div className="row">
-          <select onChange={(e) => pickCity(e.target.value)} defaultValue="">
+          <select value={cityId} onChange={(e) => pickCity(e.target.value)}>
             <option value="" disabled>
               {cities.length ? `Pick a city (${cities.length})` : "Loading cities…"}
             </option>

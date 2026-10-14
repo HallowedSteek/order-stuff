@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DEFAULT_LOCATION } from "@/lib/config";
 import { VenueMenu } from "@/components/VenueMenu";
 
 export default function VenuePage(props: PageProps<"/venue/[slug]">) {
@@ -12,5 +13,5 @@ export default function VenuePage(props: PageProps<"/venue/[slug]">) {
 async function Venue({ params, searchParams }: PageProps<"/venue/[slug]">) {
   const { slug } = await params;
   const { currency } = await searchParams;
-  return <VenueMenu slug={slug} currency={typeof currency === "string" && currency ? currency : "EUR"} />;
+  return <VenueMenu slug={slug} currency={typeof currency === "string" && currency ? currency : DEFAULT_LOCATION.currency} />;
 }
