@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/api";
-import { BasketError, saveBasket } from "@/lib/basket";
+import { BasketError, getSavedBaskets, saveBasket } from "@/lib/basket";
 import type { BasketLine } from "@/lib/types";
 
 function parseLines(v: unknown): BasketLine[] | null {
@@ -29,6 +29,15 @@ export async function POST(req: Request) {
     return NextResponse.json(await saveBasket(body.slug, lines));
   } catch (err) {
     if (err instanceof BasketError) return NextResponse.json({ error: err.message }, { status: 422 });
+    return errorResponse(err);
+  }
+}
+
+/** What Wolt has stored for the account (raw), to compare against what we sent. */
+export async function GET() {
+  try {
+    return NextResponse.json(await getSavedBaskets());
+  } catch (err) {
     return errorResponse(err);
   }
 }

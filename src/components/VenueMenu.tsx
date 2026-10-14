@@ -15,7 +15,7 @@ const ENDPOINTS: Record<Menu["source"], string> = {
 type SendState =
   | { status: "idle" }
   | { status: "sending" }
-  | { status: "sent"; total: number; currency: string }
+  | { status: "sent"; total: number; currency: string; payload: unknown; response: unknown }
   | { status: "error"; message: string };
 
 /** Estimated line price from the menu; the server recomputes from Wolt's catalog. */
@@ -43,6 +43,19 @@ export function VenueMenu({ slug, currency }: { slug: string; currency: string }
   const [cart, setCart] = useState<BasketLine[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
   const [send, setSend] = useState<SendState>({ status: "idle" });
+  const [saved, setSaved] = useState<{ loading: boolean; data?: unknown; error?: string }>({ loading: false });
+
+  async function loadSaved() {
+    setSaved({ loading: true });
+    try {
+      const res = await fetch("/api/basket");
+      const data = await res.json();
+      if (!res.ok) throw new Error([data.error, data.upstream].filter(Boolean).join("\n"));
+      setSaved({ loading: false, data });
+    } catch (e) {
+      setSaved({ loading: false, error: (e as Error).message });
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/venues/${encodeURIComponent(slug)}/menu`)
@@ -93,7 +106,7 @@ export function VenueMenu({ slug, currency }: { slug: string; currency: string }
       });
       const data = await res.json();
       if (!res.ok) throw new Error([data.error, data.upstream].filter(Boolean).join("\n"));
-      setSend({ status: "sent", total: data.total, currency: data.currency });
+      setSend({ status: "sent", total: data.total, currency: data.currency, payload: data.payload, response: data.response });
     } catch (e) {
       setSend({ status: "error", message: (e as Error).message });
     }
@@ -182,7 +195,30 @@ export function VenueMenu({ slug, currency }: { slug: string; currency: string }
                   Basket to check out. This replaced any earlier basket you had at this restaurant.
                 </p>
               )}
+              {send.status === "sent" && (
+                <details>
+                  <summary>What we sent / what Wolt answered</summary>
+                  <pre>{JSON.stringify({ sent: send.payload, response: send.response }, null, 2)}</pre>
+                </details>
+              )}
               {send.status === "error" && <p className="error">{send.message}</p>}
+            </section>
+          )}
+
+          {connected && (
+            <section className="panel">
+              <div className="row">
+                <button type="button" className="secondary" onClick={loadSaved} disabled={saved.loading}>
+                  {saved.loading ? "Loading…" : "Show baskets saved on my Wolt account"}
+                </button>
+              </div>
+              {saved.error && <p className="error">{saved.error}</p>}
+              {saved.data !== undefined && (
+                <details open>
+                  <summary>GET /order-xp/v1/baskets/count + /order-xp/web/v1/pages/baskets</summary>
+                  <pre>{JSON.stringify(saved.data, null, 2)}</pre>
+                </details>
+              )}
             </section>
           )}
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { getAccessToken } from "./session";
 import type { BasketLine } from "./types";
+import { BUCHAREST } from "./config";
 import {
   CONSUMER_API,
   WEB_HEADERS,
@@ -87,7 +88,8 @@ export function buildBasketPayload(
       name,
       price: unitPrice * line.count,
       options,
-      substitution_settings: { is_allowed: false },
+      // wolt.com sends true (allow the venue to substitute out-of-stock items).
+      substitution_settings: { is_allowed: true },
     };
   });
 
@@ -122,8 +124,25 @@ export async function saveBasket(slug: string, lines: BasketLine[]) {
   });
   return {
     basketId: asString(res.id),
+    venueId: venue.id,
+    // Echoed back so the UI can show exactly what Wolt received.
+    payload,
+    response: res,
     items: payload.items.length,
     total: payload.items.reduce((sum, i) => sum + i.price, 0),
     currency: venue.currency,
   };
+}
+
+/**
+ * GET /order-xp/web/v1/pages/baskets — the account's saved baskets as wolt.com
+ * lists them (location-based, so we ask for Bucharest). Returned raw for debugging.
+ */
+export async function getSavedBaskets() {
+  const params = new URLSearchParams({ lat: String(BUCHAREST.lat), lon: String(BUCHAREST.lon) });
+  const [page, count] = await Promise.all([
+    authed<Json>(`${CONSUMER_API}/order-xp/web/v1/pages/baskets?${params}`),
+    authed<Json>(`${CONSUMER_API}/order-xp/v1/baskets/count`).catch((e: Error) => ({ error: e.message })),
+  ]);
+  return { count, page };
 }
