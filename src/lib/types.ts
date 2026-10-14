@@ -84,3 +84,32 @@ export interface TokenPair {
   refresh_token: string;
   expires_in?: number;
 }
+
+/** Normalized menu returned by our /api/venues/[slug]/menu route. */
+export interface MenuEntry {
+  id: string;
+  name: string;
+  description?: string;
+  /** Minor units (bani), like every other Wolt price. */
+  price: number | null;
+  imageUrl?: string;
+  disabled: boolean;
+  /** Names of the option groups (sizes, extras, …) the item offers. */
+  options: string[];
+}
+
+export interface MenuCategory {
+  name: string;
+  items: MenuEntry[];
+}
+
+export interface Menu {
+  /** Which Wolt endpoint produced the data. */
+  source: "assortment" | "menu-data";
+  categories: MenuCategory[];
+  itemCount: number;
+  /** Wolt's `loading_strategy`; "partial" may mean some items are missing. */
+  loadingStrategy?: string;
+  /** Upstream payload, included only when nothing could be parsed, to debug the shape. */
+  raw?: unknown;
+}

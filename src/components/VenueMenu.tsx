@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { RawJson } from "@/components/RawJson";
 import { formatPrice } from "@/lib/format";
-import type { MenuItem } from "@/lib/types";
+import type { Menu } from "@/lib/types";
+
+const ENDPOINTS: Record<Menu["source"], string> = {
+  assortment: "GET consumer-api /consumer-assortment/v1/venues/slug/{slug}/assortment",
+  "menu-data": "GET restaurant-api /v4/venues/slug/{slug}/menu/data",
+};
 
 export function VenueMenu({ slug, currency }: { slug: string; currency: string }) {
-  const [items, setItems] = useState<MenuItem[] | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,19 +20,10 @@ export function VenueMenu({ slug, currency }: { slug: string; currency: string }
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error([data.error, data.upstream].filter(Boolean).join("\n"));
-        setItems(data);
+        setMenu(data);
       })
       .catch((e: Error) => setError(e.message));
   }, [slug]);
-
-  const byCategory = useMemo(() => {
-    const groups = new Map<string, MenuItem[]>();
-    for (const item of items ?? []) {
-      const key = item.category || "Uncategorized";
-      groups.set(key, [...(groups.get(key) ?? []), item]);
-    }
-    return groups;
-  }, [items]);
 
   return (
     <main>
@@ -35,41 +31,63 @@ export function VenueMenu({ slug, currency }: { slug: string; currency: string }
         <Link href="/">← Back</Link>
       </p>
       <h1>{slug}</h1>
-      <p className="muted">GET /v4/venues/slug/{slug}/menu/data</p>
 
       {error && <p className="error">{error}</p>}
-      {!items && !error && <p className="muted">Loading menu…</p>}
-      {items && items.length === 0 && (
-        <p className="muted">
-          No items returned. The doc notes this endpoint can respond 200 with an empty body.
-        </p>
-      )}
+      {!menu && !error && <p className="muted">Loading menu…</p>}
 
-      {[...byCategory].map(([category, list]) => (
-        <section key={category}>
-          <h2 style={{ fontSize: "1.1rem" }}>
-            {category} <span className="muted">({list.length})</span>
-          </h2>
-          <div className="grid">
-            {list.map((item) => (
-              <div key={item.id} className="card" style={{ opacity: item.enabled === false ? 0.5 : 1 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {item.images?.[0]?.url && <img src={item.images[0].url} alt="" loading="lazy" />}
-                <div className="body">
-                  <span className="title">{item.name}</span>
-                  <span>{formatPrice(item.baseprice, currency)}</span>
-                  {item.description && <span className="muted">{item.description}</span>}
-                  {!!item.options?.length && (
-                    <span className="muted">{item.options.length} option group(s)</span>
-                  )}
-                </div>
+      {menu && (
+        <>
+          <p className="muted">
+            {menu.itemCount} items in {menu.categories.length} categories · via{" "}
+            {ENDPOINTS[menu.source].replace("{slug}", slug)}
+          </p>
+          {menu.loadingStrategy === "partial" && (
+            <p className="muted">Wolt returned a partial menu; some items may be missing.</p>
+          )}
+          {menu.itemCount === 0 && (
+            <p className="error">
+              Both menu endpoints returned no items. Check &ldquo;Raw JSON&rdquo; below for what Wolt sent.
+            </p>
+          )}
+
+          {menu.categories.length > 1 && (
+            <nav className="row" style={{ margin: "12px 0" }}>
+              {menu.categories.map((c, i) => (
+                <a key={i} href={`#cat-${i}`} className="muted">
+                  {c.name}
+                </a>
+              ))}
+            </nav>
+          )}
+
+          {menu.categories.map((category, i) => (
+            <section key={i} id={`cat-${i}`}>
+              <h2 style={{ fontSize: "1.1rem" }}>
+                {category.name} <span className="muted">({category.items.length})</span>
+              </h2>
+              <div className="grid">
+                {category.items.map((item) => (
+                  <div key={item.id} className="card" style={{ opacity: item.disabled ? 0.5 : 1 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy" />}
+                    <div className="body">
+                      <span className="title">{item.name}</span>
+                      <span>{formatPrice(item.price, currency)}</span>
+                      {item.description && <span className="muted">{item.description}</span>}
+                      {item.options.length > 0 && (
+                        <span className="muted">Options: {item.options.join(", ")}</span>
+                      )}
+                      {item.disabled && <span className="muted">Unavailable</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      ))}
+            </section>
+          ))}
 
-      {items && <RawJson data={items} />}
+          <RawJson data={menu.raw ?? menu} />
+        </>
+      )}
     </main>
   );
 }
